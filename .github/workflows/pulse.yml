@@ -2,10 +2,12 @@ name: Autonomous Activity Pulse
 
 on:
   schedule:
-    # Window 1: Evening session start (13:30 UTC = 19:00 IST)
+    # Checkpoint 1: Evening Session Start (13:30 UTC = 19:00 IST)
     - cron: '30 13 * * *'
-    # Window 2: Late night wrap-up (16:30 UTC = 22:00 IST)
-    - cron: '30 16 * * *'
+    # Checkpoint 2: Mid-Evening Flow (15:45 UTC = 21:15 IST)
+    - cron: '45 15 * * *'
+    # Checkpoint 3: Late Night Wrap-up (17:15 UTC = 22:45 IST)
+    - cron: '15 17 * * *'
   workflow_dispatch:
 
 permissions:
@@ -26,15 +28,27 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Human Behavior Random Timing Jitter
+      - name: Advanced Anti-Pattern Timing Engine
         run: |
           python delay_jitter.py
 
-      - name: Record Heartbeat Pulse
+      - name: Check Cadence Skip
+        id: check_skip
+        run: |
+          if [ -f ".skip_run" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            rm -f .skip_run
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Record Heartbeat Pulse (Primary)
+        if: steps.check_skip.outputs.skip != 'true'
         run: |
           python update_status.py
 
-      - name: Commit and Push Activity
+      - name: Commit and Push (Primary)
+        if: steps.check_skip.outputs.skip != 'true'
         run: |
           git config --global user.name "Pranjal Das"
           git config --global user.email "dpranjal366@gmail.com"
@@ -42,3 +56,18 @@ jobs:
           COMMIT_MSG=$(cat .commit_msg 2>/dev/null || echo "chore(pulse): health checkpoint [skip ci]")
           git diff --staged --quiet || git commit -m "$COMMIT_MSG"
           git push origin main
+
+      - name: Natural Developer Micro-Burst (Optional Follow-Up)
+        if: steps.check_skip.outputs.skip != 'true'
+        run: |
+          if [ -f ".micro_burst" ]; then
+            BURST_DELAY=$(cat .micro_burst)
+            echo "⚡ Micro-burst detected: Waiting ${BURST_DELAY}s for follow-up developer refinement..."
+            rm -f .micro_burst
+            sleep $BURST_DELAY
+            python update_status.py
+            git add -A
+            BURST_MSG=$(cat .commit_msg 2>/dev/null || echo "fix(telemetry): adjust threshold calibration [skip ci]")
+            git diff --staged --quiet || git commit -m "$BURST_MSG"
+            git push origin main
+          fi
