@@ -2,8 +2,10 @@ name: Autonomous Activity Pulse
 
 on:
   schedule:
-    # Runs 4 times a day at 00:17, 06:17, 12:17, and 18:17 UTC
-    - cron: '17 0,6,12,18 * * *'
+    # Window 1: Evening session start (13:30 UTC = 19:00 IST)
+    - cron: '30 13 * * *'
+    # Window 2: Late night wrap-up (16:30 UTC = 22:00 IST)
+    - cron: '30 16 * * *'
   workflow_dispatch:
 
 permissions:
@@ -24,6 +26,10 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Human Behavior Random Timing Jitter
+        run: |
+          python delay_jitter.py
+
       - name: Record Heartbeat Pulse
         run: |
           python update_status.py
@@ -33,5 +39,6 @@ jobs:
           git config --global user.name "Pranjal Das"
           git config --global user.email "dpranjal366@gmail.com"
           git add -A
-          git diff --staged --quiet || git commit -m "chore(pulse): automated activity heartbeat $(date -u +'%Y-%m-%d %H:%M:%S UTC') [skip ci]"
+          COMMIT_MSG=$(cat .commit_msg 2>/dev/null || echo "chore(pulse): health checkpoint [skip ci]")
+          git diff --staged --quiet || git commit -m "$COMMIT_MSG"
           git push origin main
