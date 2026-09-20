@@ -2,12 +2,15 @@ name: Autonomous Activity Pulse
 
 on:
   schedule:
-    # Checkpoint 1: Evening Session Start (13:30 UTC = 19:00 IST)
+    # 6 Year-Round Fluid Checkpoints (UTC):
+    # Morning (10:00 IST), Early Afternoon (13:00 IST), Late Afternoon (16:00 IST),
+    # Evening (19:00 IST), Night (21:30 IST), Midnight (00:00 IST)
+    - cron: '30 4 * * *'
+    - cron: '30 7 * * *'
+    - cron: '30 10 * * *'
     - cron: '30 13 * * *'
-    # Checkpoint 2: Mid-Evening Flow (15:45 UTC = 21:15 IST)
-    - cron: '45 15 * * *'
-    # Checkpoint 3: Late Night Wrap-up (17:15 UTC = 22:45 IST)
-    - cron: '15 17 * * *'
+    - cron: '00 16 * * *'
+    - cron: '30 18 * * *'
   workflow_dispatch:
 
 permissions:
@@ -28,7 +31,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Advanced Anti-Pattern Timing Engine
+      - name: Year-Round Anti-Pattern Timing Engine
         run: |
           python delay_jitter.py
 
