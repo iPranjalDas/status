@@ -1,1 +1,1 @@
-perf(monitor): streamline heartbeat sync buffers [skip ci]
+refactor(telemetry): optimize health log rotation and state persistence [skip ci]

@@ -30,5 +30,7 @@ jobs:
           python-version: '3.11'
 
       - name: Execute Developer Coding Session
+        env:
+          STATUS_TOKEN: ${{ secrets.STATUS_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           python session_runner.py

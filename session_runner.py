@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
 session_runner.py
-Developer Session Clustering & Fluid Multi-Commit Engine
-Simulates authentic human developer sessions:
+Developer Session Clustering & Multi-Repository Distribution Engine
+Simulates authentic human developer sessions across 3 active repositories:
+- iPranjalDas/status      (Uptime pulse, status badges, system health)
+- iPranjalDas/telemetry   (Performance benchmarks, latency metrics, diagnostics)
+- iPranjalDas/daily-logs  (Engineering journal, developer notes, TIL checkpoints)
+
+Features:
 - Makes 2 to 6 commits in the SAME session with realistic coding intervals (8–23 min gaps)
+- Distributes commits across the 3 repositories so activity looks completely natural
 - Supports split days: e.g. Morning single commit (10:23) + Evening cluster (17:48, 18:09) or vice versa
 - Daily volume: Strictly between 2 and 7 commits per day
-- Rotates conventional commit scopes and modifies telemetry/README
 - 100% cloud-executed on GitHub Actions (zero laptop footprint)
 """
 
@@ -19,7 +24,7 @@ import sys
 import time
 from datetime import datetime, timezone, timedelta
 
-import update_status
+import multi_repo_engine
 
 STATUS_FILE = "pulse.json"
 SKIP_FLAG_FILE = ".skip_run"
@@ -34,10 +39,10 @@ TIME_WINDOWS = [
     {"name": "Midnight",        "ist_start": "00:00", "hours_utc": (18, 19, 20)}
 ]
 
-def run_cmd(cmd):
-    res = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+def run_cmd_in(cwd, cmd):
+    res = subprocess.run(cmd, shell=True, text=True, cwd=cwd, capture_output=True)
     if res.returncode != 0:
-        print(f"Command failed: {cmd}\n{res.stderr}")
+        print(f"Error in {cwd}: {cmd}\n{res.stderr}")
         return False, res.stderr
     return True, res.stdout
 
@@ -73,7 +78,7 @@ def plan_day_blueprint(today_ist):
     today_str = today_ist.strftime("%Y-%m-%d")
     is_weekend = today_ist.weekday() >= 5
 
-    seed = int(hashlib.sha256(f"blueprint-v3-{today_str}".encode()).hexdigest(), 16)
+    seed = int(hashlib.sha256(f"blueprint-v4-{today_str}".encode()).hexdigest(), 16)
     rng = random.Random(seed)
 
     # 1. Target between 2 and 7 commits
@@ -92,13 +97,11 @@ def plan_day_blueprint(today_ist):
         target = 7
 
     # 2. Determine session clustering:
-    # 50% single focused session (all 2-6 commits in one session)
-    # 50% split session (e.g. 1 morning + 2-5 evening, or vice versa)
     if target == 2:
         session_sizes = [2] if rng.random() < 0.55 else [1, 1]
     else:
         if rng.random() < 0.45:
-            session_sizes = [target]  # Cluster of 3 to 7 commits in one session
+            session_sizes = [target]  # Cluster in one mega session
         else:
             if rng.random() < 0.65:
                 s1 = 1
@@ -106,23 +109,15 @@ def plan_day_blueprint(today_ist):
             else:
                 s1 = rng.randint(2, target - 1)
                 s2 = target - s1
-            # Randomize order (e.g. 1 then 3, or 3 then 1)
             session_sizes = [s1, s2] if rng.random() < 0.5 else [s2, s1]
 
     # 3. Assign windows to sessions
-    # Early windows (Morning: 0, Early Afternoon: 1, Late Afternoon: 2)
-    # Late windows (Evening: 3, Night: 4, Midnight: 5)
     sessions = []
     if len(session_sizes) == 1:
-        # Single session: pick best window depending on weekday/weekend
-        if is_weekend:
-            w_idx = rng.choice([0, 1, 2, 3])  # Weekend favors daytime
-        else:
-            w_idx = rng.choice([2, 3, 4])     # Weekday favors late afternoon / evening / night
+        w_idx = rng.choice([0, 1, 2, 3]) if is_weekend else rng.choice([2, 3, 4])
         sessions.append({"window_idx": w_idx, "commits": session_sizes[0]})
     else:
-        # Two sessions: Session 1 in earlier band, Session 2 in later band
-        early_candidates = [0, 1, 2] if is_weekend else [0, 1, 2]
+        early_candidates = [0, 1, 2]
         late_candidates = [3, 4, 5]
         w1_idx = rng.choice(early_candidates)
         w2_idx = rng.choice(late_candidates)
@@ -139,69 +134,79 @@ def detect_current_window(hour_utc):
 
 def execute_session(num_commits, is_manual=False):
     """
-    Executes a developer coding session with realistic in-session pauses
-    between commits (8 to 23 minutes between commits).
+    Executes a developer coding session with realistic in-session pauses,
+    distributing commits across status, telemetry, and daily-logs!
     """
-    print(f"\n🚀 Starting Developer Coding Session: {num_commits} commit(s) planned.")
+    print(f"\n🚀 Starting Multi-Repo Developer Coding Session: {num_commits} commit(s) planned.")
     
-    run_cmd('git config --global user.name "Pranjal Das"')
-    run_cmd('git config --global user.email "dpranjal366@gmail.com"')
+    # 1. Ensure sibling repositories exist and are synced
+    status_dir = os.path.dirname(os.path.abspath(__file__))
+    token = os.environ.get("STATUS_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    
+    repo_paths = multi_repo_engine.ensure_sibling_repos(status_dir, token)
+    repo_keys = ["status", "telemetry", "daily-logs"]
 
-    for i in range(1, num_commits + 1):
+    # Shuffle or rotate target repos across the session commits
+    session_repo_targets = []
+    for i in range(num_commits):
+        # Rotate through all 3 repos
+        session_repo_targets.append(repo_keys[i % len(repo_keys)])
+    random.shuffle(session_repo_targets)
+
+    for i, target_repo in enumerate(session_repo_targets, start=1):
         now_ist, _ = get_ist_now()
-        print(f"\n--- [Commit {i}/{num_commits}] at {now_ist.strftime('%I:%M:%S %p IST')} ---")
+        target_dir = repo_paths[target_repo]
+        print(f"\n--- [Commit {i}/{num_commits}] Target: [{target_repo}] at {now_ist.strftime('%I:%M:%S %p IST')} ---")
         
-        # 1. Update telemetry & documentation
-        update_status.update()
-        
-        # 2. Stage changes
-        run_cmd("git add -A")
-        
-        # 3. Read dynamic commit message
-        commit_msg = "chore(pulse): activity sync [skip ci]"
-        if os.path.exists(".commit_msg"):
-            with open(".commit_msg", "r", encoding="utf-8") as f:
-                commit_msg = f.read().strip()
-                
-        # 4. Commit and push
-        success, out = run_cmd(f'git commit -m "{commit_msg}"')
-        if not success:
-            print("Commit skipped (nothing to commit).")
-        else:
-            print(f"✅ Committed: {commit_msg}")
-            
-        push_success, push_out = run_cmd("git push origin main")
-        if push_success:
-            print(f"🚀 Pushed commit {i}/{num_commits} to GitHub main branch!")
-        else:
-            print(f"❌ Git push error: {push_out}")
+        # 1. Update target repository content
+        if target_repo == "status":
+            commit_msg = multi_repo_engine.update_status_repo(target_dir)
+        elif target_repo == "telemetry":
+            commit_msg = multi_repo_engine.update_telemetry_repo(target_dir)
+        elif target_repo == "daily-logs":
+            commit_msg = multi_repo_engine.update_daily_logs_repo(target_dir)
 
-        # 5. If more commits remain in this session, pause naturally
+        # 2. Stage, commit, and push in target repository
+        run_cmd_in(target_dir, 'git config user.name "Pranjal Das"')
+        run_cmd_in(target_dir, 'git config user.email "dpranjal366@gmail.com"')
+        run_cmd_in(target_dir, "git add -A")
+        
+        c_ok, c_out = run_cmd_in(target_dir, f'git commit -m "{commit_msg}"')
+        if not c_ok:
+            print(f"Commit skipped in {target_repo} (nothing to commit).")
+        else:
+            print(f"✅ Committed to [{target_repo}]: {commit_msg}")
+            
+        p_ok, p_out = run_cmd_in(target_dir, "git push origin main")
+        if p_ok:
+            print(f"🚀 Pushed commit {i}/{num_commits} to [{target_repo}] on GitHub main branch!")
+        else:
+            print(f"❌ Git push error in [{target_repo}]: {p_out}")
+
+        # 3. If more commits remain in this session, pause naturally
         if i < num_commits:
             if is_manual:
                 pause_sec = 2  # Fast for manual dispatch testing
             else:
-                # Realistic developer in-session break: 8 to 23 minutes
-                pause_sec = random.randint(480, 1380)
+                pause_sec = random.randint(480, 1380) # 8 to 23 minutes
                 
             next_time = now_ist + timedelta(seconds=pause_sec)
-            print(f"⏳ In-session iteration: sleeping {pause_sec // 60}m {pause_sec % 60}s...")
+            print(f"⏳ In-session iteration: sleeping {pause_sec // 60}m {pause_sec % 60}s before next commit...")
             print(f"🎯 Next commit scheduled at ~{next_time.strftime('%I:%M:%S %p IST')}")
             time.sleep(pause_sec)
 
-    print("\n🏁 Developer Coding Session completed successfully.")
+    print("\n🏁 Multi-Repository Developer Session completed successfully.")
 
 def main():
     event_name = os.environ.get("GITHUB_EVENT_NAME", "")
     
-    # Cleanup skip flag
     if os.path.exists(SKIP_FLAG_FILE):
         os.remove(SKIP_FLAG_FILE)
 
-    # 1. Manual Dispatch Bypass (Instant 1 or 2 commit test)
+    # 1. Manual Dispatch Bypass (Instant 2-commit multi-repo test)
     if event_name == "workflow_dispatch":
-        print("⚡ Manual workflow_dispatch detected: executing session immediately.")
-        execute_session(num_commits=1, is_manual=True)
+        print("⚡ Manual workflow_dispatch detected: executing multi-repo session immediately.")
+        execute_session(num_commits=2, is_manual=True)
         return
 
     now_ist, now_utc = get_ist_now()
@@ -255,14 +260,13 @@ def main():
         return
 
     # 5. Session Start Initial Jitter (3m to 25m)
-    # E.g., triggers around 17:30, starts session at 17:48!
     start_jitter = random.randint(180, 1500)
     start_time_ist = now_ist + timedelta(seconds=start_jitter)
     print(f"🎯 Session Start Time: {start_time_ist.strftime('%I:%M:%S %p IST')}")
     print(f"⏳ Sleeping {start_jitter // 60}m {start_jitter % 60}s before commencing session...")
     time.sleep(start_jitter)
 
-    # 6. Execute the multi-commit session!
+    # 6. Execute the multi-commit multi-repo session!
     execute_session(session_commits, is_manual=False)
 
 if __name__ == "__main__":
