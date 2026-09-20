@@ -1,0 +1,37 @@
+name: Autonomous Activity Pulse
+
+on:
+  schedule:
+    # Runs 4 times a day at 00:17, 06:17, 12:17, and 18:17 UTC
+    - cron: '17 0,6,12,18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.STATUS_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Record Heartbeat Pulse
+        run: |
+          python update_status.py
+
+      - name: Commit and Push Activity
+        run: |
+          git config --global user.name "Pranjal Das"
+          git config --global user.email "dpranjal366@gmail.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "chore(pulse): automated activity heartbeat $(date -u +'%Y-%m-%d %H:%M:%S UTC') [skip ci]"
+          git push origin main
