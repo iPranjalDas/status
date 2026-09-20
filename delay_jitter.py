@@ -2,10 +2,10 @@
 """
 delay_jitter.py
 Year-Round Organic Cadence & History-Aware Anti-Pattern Engine
-Dynamically disperses GitHub activity across the entire 24-hour day throughout the year:
+Dynamically disperses GitHub activity between 2 and 7 commits per day:
+- Daily Dynamic Quota: Strictly between 2 and 7 commits/day (maximizing deep green squares)
 - Fluid year-round scheduling: Morning, Early Afternoon, Late Afternoon, Evening, Night, Midnight
-- Day-of-week sensitivity: Weekends skew towards daytime hackathons; Weekdays skew towards evening/night sessions
-- Daily dynamic targets: Varies between 1, 2, and 3 commits/day
+- Day-of-week sensitivity: Weekends favor daytime hackathons; Weekdays favor evening/night sessions
 - History-aware collision avoidance (≥15-25m delta from prior days)
 - Developer micro-bursts (occasional follow-up commit 4-11 minutes later)
 - 100% cloud-executed on GitHub Actions (zero laptop footprint)
@@ -57,37 +57,55 @@ def count_commits_today(today_str, history):
 
 def plan_day_schedule(today_ist):
     """
-    Computes today's dynamic quota (1, 2, or 3) and selects which time bands
-    will be active for this specific calendar date throughout the year.
-    Uses SHA-256 seeding so all runs on the same date agree on the day's plan.
+    Computes today's dynamic quota (strictly 2 to 7 commits) and selects
+    which time bands and micro-bursts will be active for this date.
+    Uses SHA-256 seeding so all runs on the same date agree on the blueprint.
     """
     today_str = today_ist.strftime("%Y-%m-%d")
     is_weekend = today_ist.weekday() >= 5
     
-    seed = int(hashlib.sha256(f"status-{today_str}".encode()).hexdigest(), 16)
+    seed = int(hashlib.sha256(f"status-v2-target-{today_str}".encode()).hexdigest(), 16)
     rng = random.Random(seed)
     
-    # Target distribution: 1 commit (30%), 2 commits (55%), 3 commits (15%)
+    # Target distribution strictly between 2 and 7:
+    # 2 (15%), 3 (25%), 4 (25%), 5 (15%), 6 (10%), 7 (10%)
     roll = rng.randint(1, 100)
-    if roll <= 30:
-        target = 1
-    elif roll <= 85:
+    if roll <= 15:
         target = 2
-    else:
+    elif roll <= 40:
         target = 3
+    elif roll <= 65:
+        target = 4
+    elif roll <= 80:
+        target = 5
+    elif roll <= 92:
+        target = 6
+    else:
+        target = 7
+
+    # Determine windows and micro-burst allocations
+    if target > 6:
+        windows_needed = 6
+        burst_count = target - 6  # 1 burst needed for 7
+    else:
+        # For targets 3 to 6, 30% chance to consolidate 1 window into a micro-burst
+        if target >= 3 and rng.random() < 0.30:
+            windows_needed = target - 1
+            burst_count = 1
+        else:
+            windows_needed = target
+            burst_count = 0
 
     # Weights by time band
     # [Morning, Early Afternoon, Late Afternoon, Evening, Night, Midnight]
     if is_weekend:
-        # Weekends: high daytime hackathons
-        weights = [20, 25, 25, 20, 20, 15]
+        weights = [22, 25, 23, 18, 20, 15]
     else:
-        # Weekdays: high late afternoon/evening/night, but morning/lunch still happen
-        weights = [10, 15, 20, 35, 30, 15]
+        weights = [10, 15, 22, 32, 28, 18]
 
     chosen_indices = []
     candidates = list(range(len(TIME_BANDS)))
-    for _ in range(target):
+    for _ in range(windows_needed):
         total_w = sum(weights[i] for i in candidates)
         pick_val = rng.uniform(0, total_w)
         cum = 0
@@ -99,7 +117,11 @@ def plan_day_schedule(today_ist):
                 break
 
     chosen_indices.sort()
-    return target, chosen_indices
+    
+    # Select which window gets the micro-burst (if any)
+    burst_window_idx = chosen_indices[rng.randint(0, len(chosen_indices) - 1)] if burst_count > 0 else -1
+
+    return target, chosen_indices, burst_window_idx
 
 def detect_current_band(hour_utc):
     for idx, band in enumerate(TIME_BANDS):
@@ -115,7 +137,7 @@ def check_history_collision(target_minute_of_day, history):
             time_part = ts.split(" ")[1]
             hh, mm = map(int, time_part.split(":")[:2])
             prev_minute = hh * 60 + mm
-            if abs(prev_minute - target_minute_of_day) < 18:
+            if abs(prev_minute - target_minute_of_day) < 15:
                 return True
         except Exception:
             pass
@@ -139,7 +161,7 @@ def main():
     hour_utc = now_utc.hour
 
     history = load_history()
-    target_count, active_band_indices = plan_day_schedule(now_ist)
+    target_count, active_band_indices, burst_window_idx = plan_day_schedule(now_ist)
     commits_today = count_commits_today(today_str, history)
 
     active_band_names = [TIME_BANDS[i]["name"] for i in active_band_indices]
@@ -147,48 +169,50 @@ def main():
 
     print(f"📅 Date (IST): {today_str} ({now_ist.strftime('%A')})")
     print(f"🕒 Current Clock: {now_ist.strftime('%I:%M:%S %p IST')} ({now_utc.strftime('%H:%M:%S UTC')})")
-    print(f"🎯 Today's Dynamic Target: {target_count} commit(s) | Active Bands Today: {active_band_names}")
-    print(f"📊 Commits already completed today: {commits_today}")
+    print(f"🎯 Today's Dynamic Quota: {target_count} commits (Range: 2–7)")
+    print(f"🗺️ Active Windows Today: {active_band_names}")
+    print(f"📊 Commits completed so far today: {commits_today}")
 
     # 2. Check if today's quota is already satisfied
     if commits_today >= target_count:
         print(f"✅ Quota satisfied: Already made {commits_today} commit(s) today (Target: {target_count}).")
-        print("💤 Skipping this window to maintain natural cadence.")
+        print("💤 Skipping this window to preserve natural organic cadence.")
         with open(SKIP_FLAG_FILE, "w") as f:
             f.write("skip")
         return
 
-    # 3. Check if the current time band was chosen for today
+    # 3. Check if current time band is scheduled for today
     if current_band_idx != -1 and current_band_idx not in active_band_indices:
         print(f"💤 Current window '{current_band['name']}' is NOT scheduled for today (Scheduled: {active_band_names}).")
-        print("💤 Skipping gracefully to let activity occur in today's selected windows.")
+        print("💤 Skipping gracefully to allow activity in today's selected windows.")
         with open(SKIP_FLAG_FILE, "w") as f:
             f.write("skip")
         return
 
-    # 4. Calculate Human Jitter Delay
-    # Jitter range: 4 minutes to 62 minutes
-    delay_sec = random.randint(240, 3720)
+    # 4. Calculate Human Jitter Delay (3m to 58m)
+    delay_sec = random.randint(180, 3480)
     target_time_ist = now_ist + timedelta(seconds=delay_sec)
     target_minute = target_time_ist.hour * 60 + target_time_ist.minute
 
-    # 5. History Collision Avoidance
+    # 5. Anti-Collision Protection
     if check_history_collision(target_minute, history):
-        perturb = random.choice([-900, -600, 720, 1200, 1500])
-        delay_sec = max(180, delay_sec + perturb)
+        perturb = random.choice([-720, -480, 600, 960, 1200])
+        delay_sec = max(120, delay_sec + perturb)
         target_time_ist = now_ist + timedelta(seconds=delay_sec)
-        print("🔀 History collision detected: perturbed delay to break repeating time-clusters.")
+        print("🔀 History collision detected: perturbed delay to break repeating time slots.")
 
     band_name = current_band["name"] if current_band else "Fluid Dynamic"
-    print(f"🎯 Window: {band_name} | Target Commit Time: {target_time_ist.strftime('%I:%M:%S %p IST')}")
+    print(f"🎯 Active Window: {band_name} | Target Commit Time: {target_time_ist.strftime('%I:%M:%S %p IST')}")
     print(f"⏳ Sleeping for {delay_sec} seconds ({delay_sec // 60}m {delay_sec % 60}s) on GitHub cloud runner...")
 
-    # 6. Micro-Burst Simulation (20% chance on multi-commit days)
-    if target_count == 3 and commits_today == 0:
-        burst_offset = random.randint(240, 660) # 4 to 11 minutes
+    # 6. Micro-Burst Trigger
+    # Trigger if this window was chosen for burst OR if remaining quota exceeds remaining windows
+    remaining_needed = target_count - commits_today
+    if current_band_idx == burst_window_idx or remaining_needed > len(active_band_indices):
+        burst_offset = random.randint(240, 660) # 4 to 11 minutes follow-up
         with open(BURST_FLAG_FILE, "w") as f:
             f.write(str(burst_offset))
-        print(f"⚡ Natural micro-burst enabled: secondary commit will follow {burst_offset // 60}m after.")
+        print(f"⚡ Natural developer micro-burst scheduled: follow-up commit {burst_offset // 60}m later.")
 
     time.sleep(delay_sec)
     print("✅ Jitter sleep completed. Handing over to pulse generator.")

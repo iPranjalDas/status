@@ -187,7 +187,7 @@ def update():
 | **Last Synchronized Pulse (IST)** | `{timestamp_ist_str}` |
 | **Last Synchronized Pulse (UTC)** | `{timestamp_utc_str}` |
 | **Timing Pattern** | `Anti-Pattern Non-Repeating Jitter (History-Aware)` |
-| **Daily Variance** | `Dynamic 1 to 3 Commits / Day + Micro-Bursts` |
+| **Daily Contribution Range** | `Dynamic 2 to 7 Commits / Day (Deep Green Activity)` |
 | **Commit Signature** | `Pranjal Das <dpranjal366@gmail.com>` |
 | **Uptime Reliability** | `99.99%` |
 
