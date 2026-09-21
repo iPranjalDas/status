@@ -1,1 +1,1 @@
-style(badges): align uptime shields and activity badges [skip ci]
+refactor(telemetry): optimize health log rotation and state persistence [skip ci]
