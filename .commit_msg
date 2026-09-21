@@ -1,1 +1,1 @@
-refactor(telemetry): optimize health log rotation and state persistence [skip ci]
+fix(telemetry): calibrate timestamp precision and timezone offsets [skip ci]
