@@ -1,1 +1,1 @@
-fix(telemetry): calibrate timestamp precision and timezone offsets [skip ci]
+chore(deps): update runtime dependencies and pulse telemetry [skip ci]
