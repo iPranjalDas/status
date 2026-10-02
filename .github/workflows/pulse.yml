@@ -1,14 +1,8 @@
 name: Autonomous Activity Pulse
 
 on:
-  schedule:
-    # 6 Fluid Checkpoints across UTC (covers Morning, Early Afternoon, Late Afternoon, Evening, Night, Midnight in IST)
-    - cron: '30 4 * * *'   # ~10:00 IST (Morning)
-    - cron: '30 7 * * *'   # ~13:00 IST (Early Afternoon)
-    - cron: '30 10 * * *'  # ~16:00 IST (Late Afternoon)
-    - cron: '30 12 * * *'  # ~18:00 IST (Evening / 17:30 - 18:30 IST)
-    - cron: '00 16 * * *'  # ~21:30 IST (Night)
-    - cron: '30 18 * * *'  # ~00:00 IST (Midnight)
+  # schedule:
+  #   - cron: '30 4 * * *'
   workflow_dispatch:
 
 permissions:
